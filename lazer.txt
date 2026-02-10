@@ -10,7 +10,7 @@
 #include <WidgetTerminal.h>
 
 char ssid[] = "Radius";
-char pass[] = "*Remember#";
+char pass[] = "*#";
 
 Servo panServo;
 Servo tiltServo;
