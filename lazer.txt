@@ -1,0 +1,153 @@
+#define BLYNK_TEMPLATE_ID           "TMPL4CvbBKzJl"
+#define BLYNK_TEMPLATE_NAME         "Cat Laser"
+#define BLYNK_AUTH_TOKEN            "qZ_K9_XoFB_D2OFpqnGejxA87OczbknA"
+
+#define BLYNK_PRINT Serial
+
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <Servo.h>
+#include <WidgetTerminal.h>
+
+char ssid[] = "Radius";
+char pass[] = "*Remember#";
+
+Servo panServo;
+Servo tiltServo;
+
+const int laserPin = D3;     // GPIO0
+const int panPin   = D7;     // GPIO13
+const int tiltPin  = D8;     // GPIO15
+
+int currentPan  = 90;
+int currentTilt = 45;
+int moveSpeed   = 3;         // 3–10 — оптимально
+
+bool manualMode = false;
+bool laserOn    = true;
+
+WidgetTerminal terminal(V4);  // ← додали термінал на V4
+
+// Лазер ON/OFF (V0)
+BLYNK_WRITE(V0) {
+  laserOn = param.asInt();
+  digitalWrite(laserPin, laserOn ? HIGH : LOW);
+  String msg = "Лазер: " + String(laserOn ? "УВІМК" : "ВИМК");
+  Serial.println(msg);
+  terminal.println(msg);
+  terminal.flush();
+}
+
+// Режим Manual/Auto (V1)
+BLYNK_WRITE(V1) {
+  manualMode = param.asInt();
+  String msg = "Режим: " + String(manualMode ? "Manual" : "Auto");
+  Serial.println(msg);
+  terminal.println(msg);
+  terminal.flush();
+}
+
+// Джойстик X — горизонталь (V2)
+BLYNK_WRITE(V2) {
+  if (!manualMode) return;
+  
+  int x = param.asInt();             // 0..255
+  int targetPan = map(x, 0, 255, 150, 30);  // розширили трохи
+  targetPan = constrain(targetPan, 30, 150);
+
+  smoothMoveTo(targetPan, currentTilt);
+  
+  String msg = "Pan → " + String(targetPan);
+  Serial.println(msg);
+  terminal.println(msg);
+}
+
+// Джойстик Y — вертикаль (V3)
+BLYNK_WRITE(V3) {
+  if (!manualMode) return;
+  
+  int y = param.asInt();             // 0..255
+  int targetTilt = map(y, 0, 255, 20, 70);
+  targetTilt = constrain(targetTilt, 20, 70);
+
+  smoothMoveTo(currentPan, targetTilt);
+  
+  String msg = "Tilt → " + String(targetTilt);
+  Serial.println(msg);
+  terminal.println(msg);
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(100);
+  Serial.println("\n=== Cat Laser стартує ===");
+  terminal.println("Cat Laser стартує...");
+
+  pinMode(laserPin, OUTPUT);
+  digitalWrite(laserPin, laserOn ? HIGH : LOW);
+
+  panServo.attach(panPin, 500, 2400);   // краща сумісність з SG90
+  tiltServo.attach(tiltPin, 500, 2400);
+
+  panServo.write(currentPan);
+  tiltServo.write(currentTilt);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  terminal.println("Blynk ініціалізовано");
+  terminal.flush();
+}
+
+void loop() {
+  Blynk.run();
+
+  static unsigned long lastLog = 0;
+  if (millis() - lastLog > 8000) {
+    terminal.print("Blynk: ");
+    terminal.println(Blynk.connected() ? "підключено" : "відключено");
+    terminal.print("Laser: "); terminal.println(laserOn ? "ON" : "OFF");
+    terminal.print("Mode:  "); terminal.println(manualMode ? "Manual" : "Auto");
+    terminal.print("Pan:   "); terminal.println(currentPan);
+    terminal.print("Tilt:  "); terminal.println(currentTilt);
+    terminal.flush();
+    lastLog = millis();
+  }
+
+  if (!manualMode && laserOn) {
+    static unsigned long lastAutoMove = 0;
+    if (millis() - lastAutoMove > random(400, 1200)) {
+      int targetPan  = random(25, 155);
+      int targetTilt = random(25, 65);
+      smoothMoveTo(targetPan, targetTilt);
+
+      lastAutoMove = millis();
+
+      // Рідко "засвітити" паузу
+      if (random(0, 10) >= 8) {
+        digitalWrite(laserPin, LOW);
+        delay(400 + random(0, 1800));
+        digitalWrite(laserPin, laserOn ? HIGH : LOW);
+        terminal.println("Авто-пауза лазера");
+      }
+    }
+  }
+}
+
+// Плавний рух до цільової позиції (оновлена версія)
+void smoothMoveTo(int targetPan, int targetTilt) {
+  while (currentPan != targetPan || currentTilt != targetTilt) {
+    if (currentPan < targetPan) currentPan++;
+    else if (currentPan > targetPan) currentPan--;
+
+    if (currentTilt < targetTilt) currentTilt++;
+    else if (currentTilt > targetTilt) currentTilt--;
+
+    panServo.write(currentPan);
+    tiltServo.write(currentTilt);
+
+    delay(moveSpeed);           // 4–8 мс — плавно і не дуже повільно
+  }
+
+  // Переконуємось, що серво точно на місці
+  panServo.write(targetPan);
+  tiltServo.write(targetTilt);
+}
