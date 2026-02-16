@@ -1,0 +1,51 @@
+#include <Servo.h>
+
+Servo panServo;   // горизонталь (пін 9)
+Servo tiltServo;  // вертикаль (пін 10)
+int laserPin = 8; // лазер
+
+int currentPan = 90;   // поточна позиція горизонталі (стартуємо з центру)
+int currentTilt = 90;  // поточна позиція вертикалі
+
+int moveSpeed = 4;    // ШВИДКІСТЬ руху, менше=повільніше,
+
+void setup() {
+  panServo.attach(9);
+  tiltServo.attach(10);
+  pinMode(laserPin, OUTPUT);
+  digitalWrite(laserPin, HIGH);
+  randomSeed(analogRead(0));
+
+  // Початкове положення
+  panServo.write(currentPan);
+  tiltServo.write(currentTilt);
+}
+
+void loop() {
+  int targetPan = random(30, 150);   // нова ціль горизонталь
+  int targetTilt = random(30, 60);   // нова ціль вертикаль
+
+  // рухаємо до нової позиції
+  while (currentPan != targetPan || currentTilt != targetTilt) {
+    if (currentPan < targetPan) currentPan++;
+    else if (currentPan > targetPan) currentPan--;
+    
+    if (currentTilt < targetTilt) currentTilt++;
+    else if (currentTilt > targetTilt) currentTilt--;
+    
+    panServo.write(currentPan);
+    tiltServo.write(currentTilt);
+    
+    delay(moveSpeed);
+  }
+
+  // Після досягнення цілі — пауза перед наступним стрибком
+  delay(random(500, 1500));  // як довго точка стоїть на місці
+
+  // Рідкісна "втеча" лазера
+  if (random(0, 10) > 7) {
+    digitalWrite(laserPin, LOW);
+    delay(random(1000, 3000));
+    digitalWrite(laserPin, HIGH);
+  }
+}
